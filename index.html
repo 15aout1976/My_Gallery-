@@ -252,7 +252,7 @@
     <script>
         // --- CONFIGURED VARIABLES ---
         const GITHUB_USERNAME = '15aout1976'; 
-        const REPO_NAME = 'Muhadjirin-Travel-Copy';       
+        const REPO_NAME = 'My_Gallery-';       
         const MEDIA_FOLDER = 'media';           
         const READ_ONLY_TOKEN = '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'; 
         // ----------------------------
@@ -284,7 +284,7 @@
                 if (!response.ok) {
                     console.error(`GitHub API Error: ${response.statusText} (${response.status})`);
                     if (response.status === 404) {
-                        gallery.innerHTML = '<p>Error: The <code>media</code> folder was not found in the repository.</p>';
+                        gallery.innerHTML = '<p>Error: The <code>media</code> folder was not found in the repository. Check the folder name and repository name (<code>My_Gallery-</code>).</p>';
                     } else {
                         gallery.innerHTML = '<p>Error loading gallery. Check your console for details (e.g., token or rate limit issues).</p>';
                     }
