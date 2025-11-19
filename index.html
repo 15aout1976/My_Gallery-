@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dynamic GitHub Gallery</title>
+    <title>Optimized Dynamic GitHub Gallery</title>
     <style>
         * {
             margin: 0;
@@ -250,15 +250,24 @@
     </div>
 
     <script>
-        // --- CONFIGURED VARIABLES (NO TOKEN REQUIRED - REPO MUST BE PUBLIC) ---
+        // --- CONFIGURATION (REPO MUST BE PUBLIC) ---
         const GITHUB_USERNAME = '15aout1976'; 
         const REPO_NAME = 'My_Gallery-';       
         const MEDIA_FOLDER = 'media'; 
         const BRANCH_NAME = 'main'; 
-        // -----------------------------------------------------------------------
+        // --------------------------------------------
 
         let mediaItems = [];
         let currentSlideIndex = 0;
+
+        // Utility to check for modern image formats (WebP is smaller and faster)
+        const supportsWebP = (() => {
+            try {
+                return document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') === 0;
+            } catch (err) {
+                return false;
+            }
+        })();
 
         // DOM elements
         const gallery = document.getElementById('gallery');
@@ -288,7 +297,6 @@
         async function fetchMediaList() {
             try {
                 const commitSha = await getLatestCommitSha();
-                // Fetch the entire tree of the commit recursively
                 const treeUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/git/trees/${commitSha}?recursive=1`;
                 
                 const treeResponse = await fetch(treeUrl, { headers: { 'User-Agent': 'Media-Gallery-App' } });
@@ -296,25 +304,29 @@
                 
                 const treeData = await treeResponse.json();
                 
-                // Filter the tree to include only files (type: blob) within the specified media folder
                 const files = treeData.tree.filter(item => 
                     item.path.startsWith(MEDIA_FOLDER + '/') && item.type === 'blob'
                 );
 
-                // Construct the base URL for files hosted on GitHub Pages
                 const rawContentBaseUrl = `https://${GITHUB_USERNAME}.github.io/${REPO_NAME}/${MEDIA_FOLDER}/`;
 
                 mediaItems = files
                     .map((file, index) => {
-                        // Extract filename by slicing off the MEDIA_FOLDER path
                         const fileName = file.path.substring(MEDIA_FOLDER.length + 1); 
                         const ext = fileName.split('.').pop().toLowerCase();
                         const type = (['mp4', 'webm', 'ogg', 'mov']).includes(ext) ? 'video' : 'image';
                         
+                        let src = rawContentBaseUrl + fileName;
+                        
+                        // Future Optimization: If you had both .jpg and .webp, you could swap here:
+                        // if (type === 'image' && supportsWebP) {
+                        //     src = src.replace(`.${ext}`, '.webp'); 
+                        // }
+                        
                         return {
                             id: index + 1,
                             type: type,
-                            src: rawContentBaseUrl + fileName,
+                            src: src,
                             title: fileName
                         };
                     });
@@ -341,8 +353,7 @@
                 
                 if (item.type === 'image') {
                     galleryItem.innerHTML = `
-                        <img src="${item.src}" alt="${item.title}" loading="lazy">
-                    `;
+                        <img src="${item.src}" alt="${item.title}" loading="lazy"> `;
                 } else if (item.type === 'video') {
                     galleryItem.innerHTML = `
                         <video>
@@ -371,8 +382,9 @@
                     slide.innerHTML = `<img src="${item.src}" alt="${item.title}">`;
                 } else if (item.type === 'video') {
                     const videoExt = item.src.split('.').pop().toLowerCase();
+                    // OPTIMIZATION: Added muted and playsinline for better mobile compatibility/autoplay
                     slide.innerHTML = `
-                        <video controls autoplay>
+                        <video controls autoplay playsinline muted> 
                             <source src="${item.src}" type="video/${videoExt === 'mov' ? 'quicktime' : videoExt}">
                         </video>
                     `;
@@ -393,6 +405,7 @@
         // Close carousel
         function closeCarouselModal() {
             carouselModal.style.display = 'none';
+            // Pause any video when the modal closes
             const videos = carouselSlides.querySelectorAll('video');
             videos.forEach(video => {
                 video.pause();
