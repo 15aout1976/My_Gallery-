@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Media Gallery</title>
+    <title>Dynamic GitHub Gallery</title>
     <style>
         * {
             margin: 0;
@@ -250,12 +250,12 @@
     </div>
 
     <script>
-        // --- CONFIGURED VARIABLES ---
+        // --- CONFIGURED VARIABLES (NO TOKEN REQUIRED - REPO MUST BE PUBLIC) ---
         const GITHUB_USERNAME = '15aout1976'; 
         const REPO_NAME = 'My_Gallery-';       
-        const MEDIA_FOLDER = 'media';           
-        const READ_ONLY_TOKEN = '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'; 
-        // ----------------------------
+        const MEDIA_FOLDER = 'media'; 
+        const BRANCH_NAME = 'main'; 
+        // -----------------------------------------------------------------------
 
         let mediaItems = [];
         let currentSlideIndex = 0;
@@ -269,59 +269,65 @@
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
 
-        // Function to Fetch Media List from GitHub API
-        async function fetchMediaList() {
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${MEDIA_FOLDER}`;
+        // Step 1: Get the SHA of the latest commit on the main branch
+        async function getLatestCommitSha() {
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/branches/${BRANCH_NAME}`;
             
             try {
-                const response = await fetch(url, {
-                    headers: {
-                        'Authorization': `token ${READ_ONLY_TOKEN}`,
-                        'User-Agent': 'Media-Gallery-App'
-                    }
-                });
+                const response = await fetch(url, { headers: { 'User-Agent': 'Media-Gallery-App' } });
+                if (!response.ok) throw new Error(`Failed to get branch data: ${response.statusText}`);
+                const branchData = await response.json();
+                return branchData.commit.sha;
+            } catch (error) {
+                console.error("Error fetching commit SHA:", error);
+                throw new Error("Could not retrieve latest commit for the repository.");
+            }
+        }
 
-                if (!response.ok) {
-                    console.error(`GitHub API Error: ${response.statusText} (${response.status})`);
-                    if (response.status === 404) {
-                        gallery.innerHTML = '<p>Error: The <code>media</code> folder was not found in the repository. Check the folder name and repository name (<code>My_Gallery-</code>).</p>';
-                    } else {
-                        gallery.innerHTML = '<p>Error loading gallery. Check your console for details (e.g., token or rate limit issues).</p>';
-                    }
-                    return;
-                }
+        // Step 2: Use the SHA to get the contents (tree) of the media folder
+        async function fetchMediaList() {
+            try {
+                const commitSha = await getLatestCommitSha();
+                // Fetch the entire tree of the commit recursively
+                const treeUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/git/trees/${commitSha}?recursive=1`;
+                
+                const treeResponse = await fetch(treeUrl, { headers: { 'User-Agent': 'Media-Gallery-App' } });
+                if (!treeResponse.ok) throw new Error(`Failed to get tree data: ${treeResponse.statusText}`);
+                
+                const treeData = await treeResponse.json();
+                
+                // Filter the tree to include only files (type: blob) within the specified media folder
+                const files = treeData.tree.filter(item => 
+                    item.path.startsWith(MEDIA_FOLDER + '/') && item.type === 'blob'
+                );
 
-                const files = await response.json();
                 // Construct the base URL for files hosted on GitHub Pages
                 const rawContentBaseUrl = `https://${GITHUB_USERNAME}.github.io/${REPO_NAME}/${MEDIA_FOLDER}/`;
 
-                // Map the file data into the structure your gallery expects
                 mediaItems = files
-                    .filter(file => file.type === 'file' && !file.name.startsWith('.')) // Filter files, ignore hidden files
                     .map((file, index) => {
-                        const ext = file.name.split('.').pop().toLowerCase();
+                        // Extract filename by slicing off the MEDIA_FOLDER path
+                        const fileName = file.path.substring(MEDIA_FOLDER.length + 1); 
+                        const ext = fileName.split('.').pop().toLowerCase();
                         const type = (['mp4', 'webm', 'ogg', 'mov']).includes(ext) ? 'video' : 'image';
                         
                         return {
                             id: index + 1,
                             type: type,
-                            // The SRC must point to the GitHub Pages hosted file URL
-                            src: rawContentBaseUrl + file.name,
-                            title: file.name
+                            src: rawContentBaseUrl + fileName,
+                            title: fileName
                         };
                     });
                 
-                // If no items were found, display a message
                 if (mediaItems.length === 0) {
-                    gallery.innerHTML = '<p>The media folder is empty.</p>';
+                    gallery.innerHTML = '<p>The media folder is empty or no media files were found.</p>';
                     return;
                 }
 
-                // Render the gallery with the dynamically loaded items
                 populateGallery();
             } catch (error) {
-                console.error("Failed to fetch media list:", error);
-                gallery.innerHTML = '<p>An unexpected error occurred while loading the gallery. See console for details.</p>';
+                console.error("Failed to load media list securely:", error);
+                gallery.innerHTML = '<p>Error loading gallery. Please ensure your GitHub repository is **Public** and the configuration variables are correct.</p>';
             }
         }
         
@@ -358,14 +364,11 @@
             carouselDots.innerHTML = '';
             
             mediaItems.forEach((item, i) => {
-                // Create slide
                 const slide = document.createElement('div');
                 slide.className = `carousel-slide ${i === index ? 'active' : ''}`;
                 
                 if (item.type === 'image') {
-                    slide.innerHTML = `
-                        <img src="${item.src}" alt="${item.title}">
-                    `;
+                    slide.innerHTML = `<img src="${item.src}" alt="${item.title}">`;
                 } else if (item.type === 'video') {
                     const videoExt = item.src.split('.').pop().toLowerCase();
                     slide.innerHTML = `
@@ -377,7 +380,6 @@
                 
                 carouselSlides.appendChild(slide);
                 
-                // Create dot
                 const dot = document.createElement('div');
                 dot.className = `dot ${i === index ? 'active' : ''}`;
                 dot.dataset.index = i;
